@@ -94,7 +94,7 @@ CORE_FILE_FINGERPRINTS = {
     "main_adb.py":           "a6046c43e0d979bf",
     "gui_launcher.py":       "1d7893e636a8ddf5",
     "adb_controller.py":     "e030cdf9143ea9c2",
-    "ANNOUNCEMENT.md":       "6f74e1e0f32fef55",
+    "ANNOUNCEMENT.md":       "3a40b859c93aaa81",
     "GUIDE.md":              "f1a375d1da49a4ba",
     "version.json":          "da3184ce96a97d1d",
     "core/resources.py":     "4007d7730eed72f9",
