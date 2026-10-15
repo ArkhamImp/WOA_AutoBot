@@ -91,8 +91,8 @@ REQUIRED_GUARD_MODULES = (
 # 注意：core/constants.py 本身不在此列表中，因为它包含指纹数据，
 # 无法自洽校验。如需更新指纹，请运行项目根目录下的 update_fingerprints.sh
 CORE_FILE_FINGERPRINTS = {
-    "main_adb.py":           "a6046c43e0d979bf",
-    "gui_launcher.py":       "1d7893e636a8ddf5",
+    "main_adb.py":           "2f9ae39f3fbf519a",
+    "gui_launcher.py":       "6289e5096b7c2b6a",
     "adb_controller.py":     "e030cdf9143ea9c2",
     "ANNOUNCEMENT.md":       "3a40b859c93aaa81",
     "GUIDE.md":              "f1a375d1da49a4ba",
