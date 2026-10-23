@@ -104,6 +104,12 @@ class WoaBot:
         self.enable_bonus_staff = False
         self.last_bonus_staff_time = 0
         self.BONUS_COOLDOWN = 2 * 60 * 60
+        # 每日 1500 银币换 1 金币。冷却从兑换成功时起算 24 小时，不是自然日。
+        self.enable_silver_gold = False
+        self._silver_gold_next_at = 0.0
+        self._silver_gold_retry_at = 0.0
+        self._silver_gold_missing_logged = False
+        self.SILVER_GOLD_COOLDOWN_SEC = 24 * 60 * 60 + 120
         self.REGION_GLOBAL_STAFF = (565, 87, 80, 30)
         self.REGION_TASK_COST = (270, 670, 330 - 270, 695 - 670)
         self.REGION_GREEN_DOT = (405, 517, 201, 109)
@@ -1158,6 +1164,29 @@ class WoaBot:
         self.enable_bonus_staff = enabled
         self.log(f">>> [配置] 自动领取地勤: {'已开启' if enabled else '已关闭'}")
 
+    def set_silver_gold_exchange(self, enabled, next_at=None, log_change=True):
+        """每日 1500 银币换 1 金币。next_at 为下次允许兑换的时间戳。"""
+        enabled = bool(enabled)
+        changed = self.enable_silver_gold != enabled
+        self.enable_silver_gold = enabled
+        if next_at is not None:
+            try:
+                nxt = float(next_at)
+            except (TypeError, ValueError):
+                nxt = 0.0
+            if nxt > self._silver_gold_next_at:
+                self._silver_gold_next_at = nxt
+        if not (log_change and changed):
+            return
+        if not enabled:
+            self.log(">>> [配置] 每日银币换金币: 已关闭")
+            return
+        remain = self._silver_gold_next_at - time.time()
+        if remain > 60:
+            self.log(f">>> [配置] 每日银币换金币: 已开启，冷却中，约 {remain / 3600.0:.1f} 小时后兑换")
+        else:
+            self.log(">>> [配置] 每日银币换金币: 已开启，即将尝试 1500 银币换 1 金币")
+
     def set_vehicle_buy_feature(self, enabled):
         if self.enable_vehicle_buy == enabled: return
         self.enable_vehicle_buy = enabled
@@ -1873,6 +1902,9 @@ class WoaBot:
                     if self._check_tower_countdown():
                         idle_count = 0
                         continue
+                if self._maybe_daily_silver_gold():
+                    idle_count = 0
+                    continue
                 did_work = self.scan_and_process() if self._is_module_enabled('scanner') else False
                 if did_work:
                     # 任务完成 → 极速继续扫描
@@ -3119,6 +3151,205 @@ class WoaBot:
         self.log("⚠️ 未找到维修按钮")
         self.close_window()
         return False
+
+    def _persist_silver_gold_next(self, ts):
+        self._silver_gold_next_at = float(ts)
+        if not self.config_callback:
+            return
+        try:
+            self.config_callback("silver_gold_next_at", self._silver_gold_next_at)
+        except Exception:
+            pass
+
+    def _silver_gold_templates_ready(self):
+        missing = [name for name in ("silver.png", "exchange_1500_head.png")
+                   if not os.path.exists(self.icon_path + name)]
+        if not missing:
+            return True
+        if not self._silver_gold_missing_logged:
+            self._silver_gold_missing_logged = True
+            self.log("🪙 [兑换] 还不能自动兑换，icon 目录缺少：" + "、".join(missing))
+            self.log("🪙 [兑换] silver.png：主界面顶部的银飞机图标。exchange_1500_head.png：银币页左侧 1 金币卡的上半部分。")
+        self._silver_gold_retry_at = time.time() + 3600
+        return False
+
+    def _fresh_screen(self):
+        if self.adb is None:
+            return None
+        if hasattr(self.adb, "invalidate_screenshot_cache"):
+            try:
+                self.adb.invalidate_screenshot_cache()
+            except Exception:
+                pass
+        return self.adb.get_screenshot()
+
+    def _locate_template_hit(self, image_name, confidence=0.75, screen=None):
+        if self.adb is None:
+            return None
+        if screen is None:
+            screen = self._fresh_screen()
+        if screen is None:
+            return None
+        hit = self.adb.locate_image(self.icon_path + image_name, confidence=confidence, screen_image=screen)
+        if not hit:
+            return None
+        return hit
+
+    def _exchange_buy_roi(self, box):
+        """1 金币卡上半部分匹配框，换算到底部购买/倒计时那一行。坐标来自 1600×900 银币页。"""
+        x, y, w, h = box
+        scale_x = w / 310.0
+        scale_y = h / 390.0
+        bx = int(round(x + 40 * scale_x))
+        by = int(round(y + 400 * scale_y))
+        bw = max(8, int(round(230 * scale_x)))
+        bh = max(8, int(round(50 * scale_y)))
+        cx = int(round(x + w / 2.0))
+        cy = int(round(y + 422 * scale_y))
+        return bx, by, bw, bh, cx, cy
+
+    def _roi_is_yellow_button(self, screen, bx, by, bw, bh):
+        if screen is None:
+            return False
+        height, width = screen.shape[:2]
+        x1, y1 = max(0, int(bx)), max(0, int(by))
+        x2, y2 = min(width, int(bx + bw)), min(height, int(by + bh))
+        if x2 - x1 < 8 or y2 - y1 < 8:
+            return False
+        roi = screen[y1:y2, x1:x2]
+        blue = roi[:, :, 0].astype(np.int16)
+        green = roi[:, :, 1].astype(np.int16)
+        red = roi[:, :, 2].astype(np.int16)
+        yellow = (red > 190) & (green > 150) & (blue < 100)
+        return float(yellow.mean()) > 0.45
+
+    def _leave_silver_gold_shop(self):
+        for _ in range(4):
+            self._check_running()
+            screen = self._fresh_screen()
+            if screen is not None and self._locate_on_screen(
+                    'main_interface.png', screen, confidence=0.75, region=self.REGION_MAIN_ANCHOR):
+                return True
+            if self.find_and_click('back.png', wait=0.35, random_offset=2):
+                continue
+            self.close_window()
+            self.sleep(0.35)
+        return False
+
+    def _maybe_daily_silver_gold(self):
+        """到点后在主界面兑换一次 1500 银币。未到冷却时间时不做截图。"""
+        if not self.enable_silver_gold or self.adb is None:
+            return False
+        now = time.time()
+        if now < self._silver_gold_next_at or now < self._silver_gold_retry_at:
+            return False
+        if not self._silver_gold_templates_ready():
+            return False
+        if not self.safe_locate('main_interface.png', region=self.REGION_MAIN_ANCHOR, confidence=0.75):
+            self._silver_gold_retry_at = now + 45
+            return False
+        try:
+            self._do_daily_silver_gold()
+        except StopSignal:
+            raise
+        except Exception as e:
+            self.log(f"🪙 [兑换] 流程出错: {e}")
+            self._silver_gold_retry_at = time.time() + 20 * 60
+            try:
+                self._leave_silver_gold_shop()
+            except StopSignal:
+                raise
+            except Exception:
+                pass
+        return True
+
+    def _do_daily_silver_gold(self):
+        self._check_running()
+        self.log("🪙 [兑换] 点击银飞机图标，进入银币页")
+        if not self.find_and_click('silver.png', confidence=0.82, wait=0.8, random_offset=3):
+            self.log("🪙 [兑换] 主界面没有找到银飞机图标，10 分钟后再试")
+            self._silver_gold_retry_at = time.time() + 10 * 60
+            return
+
+        hit = None
+        screen = None
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            self._check_running()
+            screen = self._fresh_screen()
+            hit = self._locate_template_hit('exchange_1500_head.png', confidence=0.82, screen=screen)
+            if hit and len(hit) >= 3 and isinstance(hit[2], tuple):
+                break
+            hit = None
+            self.sleep(0.25)
+
+        if not hit or screen is None:
+            self.log("🪙 [兑换] 银币页里没有看到 1 金币兑换卡，20 分钟后再试")
+            self._silver_gold_retry_at = time.time() + 20 * 60
+            self._leave_silver_gold_shop()
+            return
+
+        bx, by, bw, bh, cx, cy = self._exchange_buy_roi(hit[2])
+        if not self._roi_is_yellow_button(screen, bx, by, bw, bh):
+            self.log("🪙 [兑换] 这张卡还在冷却（距下次刷新），先不点，30 分钟后再看")
+            self._silver_gold_retry_at = time.time() + 30 * 60
+            self._leave_silver_gold_shop()
+            return
+
+        self.log("🪙 [兑换] 购买按钮已亮，兑换 1 金币")
+        self.adb.click(cx, cy, random_offset=4)
+        self.sleep(0.55)
+
+        confirmed = False
+        saw_error = False
+        confirm_deadline = time.time() + 3.0
+        while time.time() < confirm_deadline:
+            self._check_running()
+            screen = self._fresh_screen()
+            if screen is None:
+                self.sleep(0.2)
+                continue
+            if self._locate_on_screen('error_ok.png', screen, confidence=0.75):
+                self.find_and_click('error_ok.png', confidence=0.75, wait=0.3, random_offset=4)
+                saw_error = True
+                break
+            if self._locate_on_screen('buy_vehicle_confirm.png', screen, confidence=0.75):
+                self.find_and_click('buy_vehicle_confirm.png', confidence=0.75, wait=0.4, random_offset=4)
+                confirmed = True
+                break
+            if self._locate_on_screen('yes.png', screen, confidence=0.72):
+                self.find_and_click('yes.png', confidence=0.72, wait=0.4, random_offset=4)
+                confirmed = True
+                break
+            self.sleep(0.2)
+
+        self.sleep(0.45)
+        screen = self._fresh_screen()
+        still_yellow = False
+        hit_after = self._locate_template_hit('exchange_1500_head.png', confidence=0.82, screen=screen)
+        if hit_after and len(hit_after) >= 3 and isinstance(hit_after[2], tuple):
+            bx, by, bw, bh, _, _ = self._exchange_buy_roi(hit_after[2])
+            still_yellow = self._roi_is_yellow_button(screen, bx, by, bw, bh)
+        dialog_open = False
+        if screen is not None:
+            dialog_open = bool(
+                self._locate_on_screen('cancel.png', screen, confidence=0.75)
+                or self._locate_on_screen('yes.png', screen, confidence=0.72)
+                or self._locate_on_screen('buy_vehicle_confirm.png', screen, confidence=0.75)
+            )
+        exchanged = (not saw_error) and (not dialog_open) and (confirmed or not still_yellow)
+        if saw_error:
+            self.log("🪙 [兑换] 出现提示（多半是银币不足），未兑换。1 小时后再试")
+            self._silver_gold_retry_at = time.time() + 60 * 60
+        elif exchanged:
+            next_at = time.time() + self.SILVER_GOLD_COOLDOWN_SEC
+            self._persist_silver_gold_next(next_at)
+            self._silver_gold_retry_at = next_at
+            self.log("🪙 [兑换] 已兑换 1 金币，下次约 24 小时后")
+        else:
+            self.log("🪙 [兑换] 点了购买但没有确认成功，20 分钟后再试")
+            self._silver_gold_retry_at = time.time() + 20 * 60
+        self._leave_silver_gold_shop()
 
     def _try_get_bonus_staff(self):
         if not self.enable_bonus_staff: return False

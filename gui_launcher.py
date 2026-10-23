@@ -734,6 +734,7 @@ class Application(ttkb.Window):
         self._strict_online_guard = False  # 离线模式，不强制在线验证
 
         self.var_bonus_staff = tk.BooleanVar(value=self.config.get("bonus_staff", False))
+        self.var_silver_gold = tk.BooleanVar(value=bool(self.config.get("silver_gold_enabled", False)))
         self.var_vehicle_buy = tk.BooleanVar(value=self.config.get("vehicle_buy", False))
         self.var_speed_mode = tk.BooleanVar(value=self.config.get("speed_mode", False))
         self.var_skip_staff = tk.BooleanVar(value=self.config.get("skip_staff", False))
@@ -1361,6 +1362,7 @@ class Application(ttkb.Window):
 
     def save_config(self):
         self.config["bonus_staff"] = self.var_bonus_staff.get()
+        self.config["silver_gold_enabled"] = bool(self.var_silver_gold.get())
         self.config["vehicle_buy"] = self.var_vehicle_buy.get()
         self.config["speed_mode"] = self.var_speed_mode.get()
         self.config["skip_staff"] = self.var_skip_staff.get()
@@ -2689,6 +2691,10 @@ class Application(ttkb.Window):
         notebook.add(tab1, text=" 策略 ")
         _toggle(tab1, "✈️ 自动领取地勤人员", self.var_bonus_staff,
                 "地勤不足时尝试领取免费地勤")
+        _toggle(tab1, "🪙 每日银币换金币", self.var_silver_gold,
+                "先点主界面顶部的银飞机图标，进入银币页，再兑换左侧那张 1 金币的卡。\n"
+                "卡上如果是「距下次刷新」就先不点；变成黄色购买按钮才兑换。\n"
+                "成功后冷却 24 小时。不会点旁边 15000 银币或其他购买。")
         _toggle(tab1, "🚗 自动购买地勤车辆", self.var_vehicle_buy,
                 "地勤车辆不足时自动购买")
         _toggle(tab1, "💰 延误飞机自动贿赂", self.var_delay_bribe,
@@ -5112,6 +5118,9 @@ class Application(ttkb.Window):
         self.save_config()
         if self.bot:
             self.bot.set_bonus_staff_feature(self.var_bonus_staff.get())
+            self.bot.set_silver_gold_exchange(
+                self.var_silver_gold.get(),
+                next_at=self.config.get("silver_gold_next_at", 0))
             self.bot.set_vehicle_buy_feature(self.var_vehicle_buy.get())
             self.bot.set_speed_mode(self.var_speed_mode.get())
             self.bot.set_skip_staff_verify(self.var_skip_staff.get())
@@ -5145,6 +5154,12 @@ class Application(ttkb.Window):
         def _apply_update():
             if key == "auto_delay_count":
                 self.var_delay_count.set(str(value))
+            elif key == "silver_gold_next_at":
+                try:
+                    self.config["silver_gold_next_at"] = float(value)
+                except (TypeError, ValueError):
+                    return
+                self.save_config()
             elif key == "vehicle_buy":
                 self.var_vehicle_buy.set(bool(value))
             elif key == "mumu_path":

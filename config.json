@@ -1,10 +1,11 @@
 {
   "2d_mode": true,
   "adb_path": "G:/MuMuPlayer/nx_main/adb.exe",
+  "announcement_last_hash": "3a40b859c93aaa81",
   "anti_stuck_enabled": true,
   "anti_stuck_threshold": 6,
   "auto_delay_count": 0,
-  "bonus_staff": false,
+  "bonus_staff": true,
   "cancel_stand_filter": true,
   "category_processing_enabled": false,
   "category_selection": {
@@ -15,6 +16,7 @@
     "passenger": false,
     "players": false
   },
+  "click_jitter": 6,
   "control_method": "uiautomator2",
   "delay_bribe": true,
   "gold_remind_enabled": false,
@@ -37,13 +39,16 @@
   "public_adb_targets": "",
   "random_task_order": false,
   "screenshot_method": "uiautomator2",
+  "silver_gold_enabled": true,
   "skip_staff": false,
   "slide_max": 500,
   "slide_min": 250,
   "speed_mode": false,
   "standalone_logout_interval": 30.0,
+  "swipe_jitter": 8,
   "theme": "light",
   "thinking_mode": 0,
   "tower_open_stand_only": true,
-  "vehicle_buy": true
+  "vehicle_buy": true,
+  "web_panel_enabled": false
 }
