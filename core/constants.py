@@ -6,7 +6,7 @@ WOA AutoBot - 全局常量 (消除在 4 个文件中重复定义的魔法值)
 from core.platform import IS_WINDOWS, IS_MAC
 
 # ─── 版本与仓库 ──────────────────────────────────────────
-LOCAL_VERSION = "1.5.0"
+LOCAL_VERSION = "1.5.1"
 OFFICIAL_REPO_URL = "https://github.com/hjtr7mymht-dot/WOA_AutoBot"
 OFFICIAL_REPO_NAME = "hjtr7mymht-dot/WOA_AutoBot"
 ONLINE_VERSION_PATH = "version.json"
@@ -91,12 +91,12 @@ REQUIRED_GUARD_MODULES = (
 # 注意：core/constants.py 本身不在此列表中，因为它包含指纹数据，
 # 无法自洽校验。如需更新指纹，请运行项目根目录下的 update_fingerprints.sh
 CORE_FILE_FINGERPRINTS = {
-    "main_adb.py":           "2f9ae39f3fbf519a",
-    "gui_launcher.py":       "6289e5096b7c2b6a",
+    "main_adb.py":           "deadeaa60239a66d",
+    "gui_launcher.py":       "2ecd4712cac0ae0c",
     "adb_controller.py":     "e030cdf9143ea9c2",
-    "ANNOUNCEMENT.md":       "3a40b859c93aaa81",
-    "GUIDE.md":              "f1a375d1da49a4ba",
-    "version.json":          "da3184ce96a97d1d",
+    "ANNOUNCEMENT.md":       "5c38364f5fe5f782",
+    "GUIDE.md":              "3a31f792387d5d17",
+    "version.json":          "8ac993044f9b79c2",
     "core/resources.py":     "4007d7730eed72f9",
     "core/platform.py":      "b1f2ebb1233089ec",
 }

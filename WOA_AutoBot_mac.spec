@@ -71,7 +71,7 @@ a = Analysis(
         # 项目内部模块
         'adb_controller', 'simple_ocr', 'gui_launcher',
         'main_adb', 'nemu_ipc', 'platform_utils',
-        'woa_debug', 'emulator_discovery',
+        'woa_debug', 'emulator_discovery', 'web_panel',
         'core', 'core.constants', 'core.platform',
         'core.resources', 'core.debug',
         'bot', 'bot.config', 'bot.tower', 'bot.filter',
@@ -133,8 +133,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'WOA AutoBot',
         'CFBundleDisplayName': 'WOA AutoBot',
-        'CFBundleVersion': '1.2.6',
-        'CFBundleShortVersionString': '1.2.6',
+        'CFBundleVersion': '1.5.1',
+        'CFBundleShortVersionString': '1.5.1',
         'CFBundlePackageType': 'APPL',
         'CFBundleInfoDictionaryVersion': '6.0',
         'LSMinimumSystemVersion': '11.0',
